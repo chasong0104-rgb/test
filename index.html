@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>원여고 분실물 지도</title>
+<meta name="description" content="지도에서 분실물을 찾고 등록하는 학교 분실물 앱" />
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#7A2E2E" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="분실물지도" />
+
+<link rel="stylesheet" href="style.css" />
+</head>
+<body data-theme="castle">
+<div id="app">
+
+  <div id="loading" class="loading-screen">불러오는 중...</div>
+
+  <div id="app-inner" style="display:none; flex-direction:column; min-height:100vh;">
+    <header class="app-header">
+      <div>
+        <div class="title" id="header-title">🧭 원여고 분실물 지도</div>
+        <div class="tagline" id="header-tagline">성을 탐험하듯 학교를 누비는 지도</div>
+      </div>
+      <button id="theme-toggle">🎨 <span id="theme-label">고성 지도</span></button>
+    </header>
+
+    <main>
+      <!-- 지도 탭 -->
+      <section id="tab-map" class="tab-section active">
+        <div class="hint">층을 고르고 지도 위의 핀을 눌러 그 장소의 분실물을 확인하세요.</div>
+        <div id="map-floor-picker" class="floor-row"></div>
+        <div id="map-mapwrap" class="map-wrap"></div>
+        <div id="map-result"></div>
+      </section>
+
+      <!-- 검색 탭 -->
+      <section id="tab-search" class="tab-section">
+        <div class="field" style="background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px;">
+          <div class="field-label" style="margin-bottom:8px;">📍 장소로 찾기</div>
+          <div class="seg-row">
+            <button class="seg-btn active" data-search-loc-mode="text">직접 입력</button>
+            <button class="seg-btn" data-search-loc-mode="map">지도에서 선택</button>
+          </div>
+          <div id="search-loc-text-wrap">
+            <input type="text" id="search-loc-text" placeholder="예: 도서관, 2학년 3반..." />
+          </div>
+          <div id="search-loc-map-wrap" style="display:none;">
+            <div id="search-floor-picker" class="floor-row"></div>
+            <div id="search-mapwrap" class="map-wrap"></div>
+            <div id="search-picked-loc" style="margin-top:8px; font-size:13px; font-weight:700; color:var(--primaryDark);"></div>
+          </div>
+        </div>
+
+        <div class="field" style="background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px;">
+          <div class="field-label" style="margin-bottom:8px;">📦 물건으로 찾기</div>
+          <div class="seg-row">
+            <button class="seg-btn active" data-search-item-mode="category">카테고리 선택</button>
+            <button class="seg-btn" data-search-item-mode="text">직접 입력</button>
+          </div>
+          <div id="search-item-category-wrap">
+            <select id="search-item-category"><option value="">전체 카테고리</option></select>
+          </div>
+          <div id="search-item-text-wrap" style="display:none;">
+            <input type="text" id="search-item-text" placeholder="예: 검정 우산, 에어팟..." />
+          </div>
+        </div>
+
+        <div class="hint" id="search-count" style="font-weight:700;">검색 결과 0건</div>
+        <div id="search-result"></div>
+      </section>
+
+      <!-- 등록 탭 -->
+      <section id="tab-add" class="tab-section">
+        <div class="field">
+          <span class="field-label">사진</span>
+          <div class="photo-row">
+            <button type="button" class="photo-btn" id="add-photo-camera">📷 촬영</button>
+            <button type="button" class="photo-btn" id="add-photo-gallery">🖼 앨범</button>
+          </div>
+          <input type="file" id="add-file-camera" accept="image/*" capture="environment" style="display:none;" />
+          <input type="file" id="add-file-gallery" accept="image/*" style="display:none;" />
+          <div id="add-photo-preview"></div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">물건 이름 *</label>
+          <input type="text" id="add-title" placeholder="예: 검정색 3단 우산" />
+        </div>
+
+        <div class="field">
+          <label class="field-label">카테고리 *</label>
+          <select id="add-category"></select>
+        </div>
+
+        <div class="field">
+          <label class="field-label">설명</label>
+          <textarea id="add-desc" rows="2" placeholder="특징을 적어주세요"></textarea>
+        </div>
+
+        <div class="field">
+          <span class="field-label">발견 장소 *</span>
+          <div class="seg-row">
+            <button class="seg-btn active" data-add-loc-mode="map">지도에서 선택</button>
+            <button class="seg-btn" data-add-loc-mode="text">직접 입력</button>
+          </div>
+          <div id="add-loc-map-wrap">
+            <div id="add-floor-picker" class="floor-row"></div>
+            <div id="add-mapwrap" class="map-wrap"></div>
+            <div id="add-picked-loc" style="margin-top:8px; font-size:13px; font-weight:700; color:var(--primaryDark);"></div>
+          </div>
+          <div id="add-loc-text-wrap" style="display:none;">
+            <select id="add-loc-floor" style="margin-bottom:8px;"></select>
+            <input type="text" id="add-loc-text" placeholder="예: 3층 서관 복도" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="checkbox-row">
+            <input type="checkbox" id="add-moved-check" />
+            이미 분실물 보관 장소로 옮겨졌어요
+          </label>
+          <div id="add-moved-text-wrap" style="display:none; margin-top:8px;">
+            <input type="text" id="add-moved-text" placeholder="예: 행정실 분실물함" />
+          </div>
+        </div>
+
+        <button class="btn-primary" id="add-submit" disabled>분실물 등록하기</button>
+      </section>
+
+      <!-- MY 탭 -->
+      <section id="tab-my" class="tab-section">
+        <div id="my-content"></div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav">
+      <button class="nav-btn active" data-tab="map">📍<span>지도</span></button>
+      <button class="nav-btn" data-tab="search">🔍<span>검색</span></button>
+      <button class="nav-btn" data-tab="add">➕<span>등록</span></button>
+      <button class="nav-btn" data-tab="my">👤<span>MY</span></button>
+    </nav>
+  </div>
+
+  <div id="item-modal" class="modal-overlay">
+    <div class="modal-sheet" id="item-modal-content"></div>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

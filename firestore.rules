@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 분실물 목록: 누구나 조회 가능(로그인 없이도), 등록/수정은 로그인(익명 포함)한 사용자만
+    match /items/{itemId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if false;
+    }
+
+    // 사용자 정보(닉네임/포인트): 누구나 조회 가능
+    // - 본인 문서는 자유롭게 생성/수정 가능
+    // - 다른 사람이 "주인 찾음" 처리를 하면 그 등록자의 points 필드만 올려줄 수 있음
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && (
+        request.auth.uid == userId ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['points'])
+      );
+    }
+  }
+}
