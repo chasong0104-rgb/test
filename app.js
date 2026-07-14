@@ -1,27 +1,4 @@
-import { firebaseConfig } from "./firebase-config.js";
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
-import {
-  initializeFirestore, collection, addDoc, onSnapshot, query, orderBy,
-  doc, updateDoc, setDoc, getDoc, increment, serverTimestamp,
-} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
-import {
-  getAuth, onAuthStateChanged, signInAnonymously,
-  createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut,
-} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
-
-/* ------------------------------------------------------------
-   Firebase 초기화
------------------------------------------------------------- */
-const app = initializeApp(firebaseConfig);
-// 비공개 릴레이(Private Relay), 학교/회사 방화벽 등 프록시 환경에서
-// 기본 스트리밍 연결이 응답 없이 멈추는 문제를 막기 위해 자동으로
-// 긴 폴링(long polling) 방식으로 전환되도록 설정합니다.
-const db = initializeFirestore(app, {
-  experimentalAutoDetectLongPolling: true,
-  useFetchStreams: false,
-});
-const auth = getAuth(app);
-const FAKE_EMAIL_DOMAIN = "@lostfound.app"; // 아이디 -> 내부 이메일 변환용
+import { supabase } from "./supabase-config.js";
 
 /* ------------------------------------------------------------
    상수: 층 / 장소 / 카테고리
@@ -47,6 +24,8 @@ function getFloorLocations(floor) {
   return POINTS.map((p, i) => ({ id: `${floor}-${p.id}`, floor, x: p.x, y: p.y, name: FLOOR_NAMES[floor][i] }));
 }
 const CATEGORIES = ["전자기기", "의류", "학용품", "지갑·카드류", "음식", "생활용품", "화장품", "악세서리", "학급", "기타"];
+const REGISTER_POINTS = 10; // 로그인 사용자가 분실물을 등록하면 적립되는 포인트 (DB 트리거가 실제 적립 처리)
+const FAKE_EMAIL_DOMAIN = "@lostfound.app"; // 아이디 -> 내부 이메일 변환용
 
 const THEME_LABELS = { castle: "고성 지도", blossom: "블로썸 핑크" };
 const THEME_TAGLINE = { castle: "성을 탐험하듯 학교를 누비는 지도", blossom: "은은한 로즈 톤으로 정리한 지도" };
@@ -74,6 +53,27 @@ const state = {
 };
 
 /* ------------------------------------------------------------
+   Supabase 행 <-> 화면용 아이템 객체 변환
+   (DB 는 snake_case, 화면 코드는 camelCase 를 씁니다)
+------------------------------------------------------------ */
+function rowToItem(r) {
+  return {
+    id: r.id,
+    title: r.title,
+    category: r.category,
+    description: r.description,
+    photo: r.photo,
+    foundLocation: r.found_location,
+    currentLocation: r.current_location,
+    status: r.status,
+    points: r.points,
+    reporterUid: r.reporter_uid,
+    reporterName: r.reporter_name,
+    createdAtMillis: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
+  };
+}
+
+/* ------------------------------------------------------------
    유틸
 ------------------------------------------------------------ */
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
@@ -94,7 +94,7 @@ function showToast(msg) {
   toastTimer = setTimeout(() => el.classList.remove("show"), 2400);
 }
 
-/* 사진 리사이즈 (Firestore 문서 용량 절약) */
+/* 사진 리사이즈 (DB 문서 용량 절약) */
 function resizeImageFile(file, maxDim = 720, quality = 0.7) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -370,26 +370,32 @@ document.getElementById("add-submit").addEventListener("click", async () => {
     const foundLocation = a.locMode === "map" ? a.picked : { id: `text-${uid()}`, floor: a.floor, name: a.locText.trim() };
     const currentLocation = a.moved ? { id: `moved-${uid()}`, floor: a.floor, name: a.movedText.trim() } : foundLocation;
     const user = state.currentUser;
+    const isRealUser = !!user; // Supabase 에서는 로그인한 사용자만 세션이 있음 (게스트는 세션 없음)
     const reporterName = state.userDoc?.nickname || "게스트";
-    await addDoc(collection(db, "items"), {
+    const { error } = await supabase.from("items").insert({
       title: a.title.trim(),
       category: a.category,
       description: a.desc.trim(),
       photo: a.photo || null,
-      foundLocation, currentLocation,
+      found_location: foundLocation,
+      current_location: currentLocation,
       status: "등록",
       points: 0,
-      reporterUid: user ? user.uid : null,
-      reporterName,
-      createdAt: serverTimestamp(),
-      createdAtMillis: Date.now(),
+      reporter_uid: user ? user.id : null,
+      reporter_name: reporterName,
     });
-    showToast("분실물이 등록되었어요! 목록에서 바로 확인해보세요.");
+    if (error) throw error;
+    // 포인트(+10P)는 DB 트리거가 로그인 사용자에게 자동 적립합니다.
+    showToast(isRealUser
+      ? `분실물이 등록되었어요! +${REGISTER_POINTS}P 적립 🎉`
+      : "분실물이 등록되었어요! 목록에서 바로 확인해보세요.");
     state.add = { photo: null, title: "", category: CATEGORIES[0], desc: "", locMode: "map", floor: 1, picked: null, locText: "", moved: false, movedText: "" };
     document.getElementById("add-title").value = "";
     document.getElementById("add-desc").value = "";
     document.getElementById("add-loc-text").value = "";
     document.getElementById("add-moved-text").value = "";
+    await loadItems();
+    if (isRealUser) loadProfile(user.id); // 적립된 포인트 즉시 갱신
     state.tab = "map";
     document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === "map"));
     document.querySelectorAll(".tab-section").forEach((s) => s.classList.remove("active"));
@@ -410,10 +416,10 @@ document.getElementById("add-submit").addEventListener("click", async () => {
 function renderMyTab() {
   const el = document.getElementById("my-content");
   const user = state.currentUser;
-  const loggedInReal = user && !user.isAnonymous;
+  const loggedInReal = !!user; // Supabase: 세션이 있으면 로그인 사용자
 
   if (loggedInReal && state.userDoc) {
-    const myItems = state.items.filter((it) => it.reporterUid === user.uid);
+    const myItems = state.items.filter((it) => it.reporterUid === user.id);
     el.innerHTML = `
       <div class="profile-card">
         <div class="profile-greet">안녕하세요</div>
@@ -426,7 +432,7 @@ function renderMyTab() {
     `;
     wireItemCards(document.getElementById("my-items"));
     document.getElementById("my-logout").addEventListener("click", async () => {
-      await signOut(auth);
+      await supabase.auth.signOut();
       showToast("로그아웃 되었어요.");
     });
     return;
@@ -471,19 +477,25 @@ async function handleAuthSubmit() {
   btn.disabled = true;
   try {
     if (state.myMode === "signup") {
-      const cred = await createUserWithEmailAndPassword(auth, email, password);
-      await setDoc(doc(db, "users", cred.user.uid), { nickname, username, points: 0, createdAt: serverTimestamp() });
+      const { error } = await supabase.auth.signUp({
+        email, password,
+        options: { data: { username, nickname } },
+      });
+      if (error) throw error;
       showToast("회원가입 완료! 환영합니다 🎉");
     } else {
-      await signInWithEmailAndPassword(auth, email, password);
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
       showToast("로그인 되었어요.");
     }
+    // 이후 처리(프로필 로드/화면 갱신)는 onAuthStateChange 가 담당합니다.
   } catch (err) {
     console.error(err);
+    const m = ((err && err.message) || "").toLowerCase();
     let msg = "요청을 처리하지 못했어요.";
-    if (err.code === "auth/email-already-in-use") msg = "이미 사용 중인 아이디예요.";
-    else if (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password" || err.code === "auth/user-not-found") msg = "아이디 또는 비밀번호가 올바르지 않아요.";
-    else if (err.code === "auth/weak-password") msg = "비밀번호는 6자 이상이어야 해요.";
+    if (m.includes("already registered") || m.includes("already been registered") || err.code === "user_already_exists") msg = "이미 사용 중인 아이디예요.";
+    else if (m.includes("invalid login credentials")) msg = "아이디 또는 비밀번호가 올바르지 않아요.";
+    else if (m.includes("weak") || (m.includes("password") && m.includes("6"))) msg = "비밀번호는 6자 이상이어야 해요.";
     errEl.textContent = msg;
     errEl.style.display = "";
   } finally {
@@ -534,12 +546,12 @@ document.getElementById("item-modal").addEventListener("click", (e) => { if (e.t
 
 async function markFound(item) {
   try {
-    await updateDoc(doc(db, "items", item.id), { status: "주인찾음", points: 10 });
-    if (item.reporterUid) {
-      await updateDoc(doc(db, "users", item.reporterUid), { points: increment(10) }).catch(() => {});
-    }
-    showToast("주인을 찾았어요! +10P 지급 완료 🎉");
+    // 임의 변조 방지를 위해 상태 변경은 전용 함수(RPC)로만 처리합니다.
+    const { error } = await supabase.rpc("mark_item_found", { item_id: item.id });
+    if (error) throw error;
+    showToast("주인을 찾았어요! 🎉");
     closeItemModal();
+    await loadItems();
   } catch (err) {
     console.error(err);
     showToast("처리에 실패했어요. 다시 시도해주세요.");
@@ -547,39 +559,59 @@ async function markFound(item) {
 }
 
 /* ------------------------------------------------------------
-   Firestore 실시간 구독 (모든 사용자에게 동일한 목록)
+   Supabase 데이터 로드 + 실시간 구독 (모든 사용자에게 동일한 목록)
 ------------------------------------------------------------ */
-function subscribeItems() {
-  const q = query(collection(db, "items"), orderBy("createdAtMillis", "desc"));
-  onSnapshot(q, (snap) => {
-    state.items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    renderCurrentTab();
-  }, (err) => console.error("items 구독 오류", err));
+async function loadItems() {
+  const { data, error } = await supabase
+    .from("items")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) { console.error("items 로드 오류", error); return; }
+  state.items = (data || []).map(rowToItem);
+  renderCurrentTab();
 }
-let unsubUserDoc = null;
-function subscribeUserDoc(uid) {
-  if (unsubUserDoc) unsubUserDoc();
-  unsubUserDoc = onSnapshot(doc(db, "users", uid), (snap) => {
-    state.userDoc = snap.exists() ? snap.data() : null;
-    if (state.tab === "my") renderMyTab();
-  });
+
+function subscribeItems() {
+  loadItems();
+  supabase
+    .channel("items-changes")
+    .on("postgres_changes", { event: "*", schema: "public", table: "items" }, () => loadItems())
+    .subscribe();
+}
+
+async function loadProfile(userId) {
+  const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+  if (error) { console.error("profile 로드 오류", error); return; }
+  state.userDoc = data || null;
+  if (state.tab === "my") renderMyTab();
+}
+
+let profileChannel = null;
+function subscribeProfile(userId) {
+  if (profileChannel) { supabase.removeChannel(profileChannel); profileChannel = null; }
+  profileChannel = supabase
+    .channel("profile-" + userId)
+    .on("postgres_changes", { event: "*", schema: "public", table: "profiles", filter: `id=eq.${userId}` }, (payload) => {
+      state.userDoc = payload.new || state.userDoc;
+      if (state.tab === "my") renderMyTab();
+    })
+    .subscribe();
 }
 
 /* ------------------------------------------------------------
    인증 상태 관리
 ------------------------------------------------------------ */
-function showConnectionError() {
-  const el = document.getElementById("loading");
-  el.innerHTML = `
-    <div style="padding:24px; text-align:center; max-width:320px;">
-      <div style="font-size:15px; font-weight:700; margin-bottom:8px;">연결이 원활하지 않아요</div>
-      <div style="font-size:13px; color:#8A7A5E; line-height:1.6; margin-bottom:16px;">
-        네트워크 연결이 느리거나(교내 와이파이, 이동통신망 등), 기기의 특정 보안 설정 때문일 수 있어요.
-        아래 버튼으로 다시 시도해보세요.
-      </div>
-      <button id="retry-connect-btn" style="background:#7A2E2E; color:#fff; border:none; border-radius:10px; padding:10px 20px; font-size:14px; font-weight:700; cursor:pointer;">다시 시도</button>
-    </div>`;
-  document.getElementById("retry-connect-btn").addEventListener("click", () => location.reload());
+function applySession(session) {
+  const user = session?.user ?? null;
+  state.currentUser = user;
+  if (user) {
+    subscribeProfile(user.id);
+    loadProfile(user.id);
+  } else {
+    state.userDoc = null;
+    if (profileChannel) { supabase.removeChannel(profileChannel); profileChannel = null; }
+    if (state.tab === "my") renderMyTab();
+  }
 }
 
 let __appRevealed = false;
@@ -592,34 +624,12 @@ function revealApp() {
   renderCurrentTab();
 }
 
-// 일정 시간(12초) 안에 로그인이 끝나지 않으면 무한 로딩 대신 재시도 화면을 보여줍니다.
-const __connectTimeout = setTimeout(() => {
-  if (!__appRevealed) showConnectionError();
-}, 12000);
-
-onAuthStateChanged(auth, async (user) => {
-  if (!user) {
-    try {
-      await signInAnonymously(auth);
-    } catch (e) {
-      console.error("익명 로그인 실패", e);
-      clearTimeout(__connectTimeout);
-      showConnectionError();
-    }
-    return;
-  }
-  clearTimeout(__connectTimeout);
-  state.currentUser = user;
-  // 화면부터 먼저 보여주고, 사용자 문서 준비는 백그라운드에서 처리합니다.
-  revealApp();
-  subscribeUserDoc(user.uid);
-  const userRef = doc(db, "users", user.uid);
-  const snap = await getDoc(userRef).catch(() => null);
-  if (!snap || !snap.exists()) {
-    await setDoc(userRef, { nickname: "게스트", points: 0, createdAt: serverTimestamp() }, { merge: true }).catch(() => {});
-  }
-});
+// 앱은 즉시 표시하고(로그인 없이도 조회 가능), 데이터는 백그라운드로 채웁니다.
+revealApp();
 subscribeItems();
+
+supabase.auth.getSession().then(({ data: { session } }) => applySession(session));
+supabase.auth.onAuthStateChange((_event, session) => applySession(session));
 
 /* ------------------------------------------------------------
    서비스 워커 등록 (설치 가능한 앱)

@@ -1,10 +1,10 @@
-const CACHE = "lostfound-shell-v1";
+const CACHE = "lostfound-shell-v2";
 const SHELL_FILES = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
-  "./firebase-config.js",
+  "./supabase-config.js",
   "./manifest.json",
   "./img/map_castle.jpg",
   "./img/map_blossom.jpg",
@@ -28,10 +28,10 @@ self.addEventListener("activate", (e) => {
   self.clients.claim();
 });
 
-// 앱 셸(정적 파일)은 캐시 우선, 그 외(Firebase 등 API 요청)는 항상 네트워크로
+// 앱 셸(정적 파일)은 캐시 우선, 그 외(Supabase 등 API 요청)는 항상 네트워크로
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-  if (url.origin !== self.location.origin) return; // Firebase 요청은 그대로 통과
+  if (url.origin !== self.location.origin) return; // Supabase 등 외부 요청은 그대로 통과
   e.respondWith(
     caches.match(e.request).then((cached) => cached || fetch(e.request))
   );
