@@ -127,6 +127,8 @@ function esc(s) {
 }
 function daysSince(ms) { return (Date.now() - ms) / 86400000; }
 function isLongTerm(item) { return daysSince(item.createdAtMillis) > LONG_TERM_DAYS; }
+// 보관함으로 이동되는 게시물: 주인찾음 처리됐거나, 등록 30일이 지난 것
+function isArchived(item) { return item.status === "주인찾음" || isLongTerm(item); }
 function sortByTime(list, order) {
   const arr = [...list];
   arr.sort((a, b) => order === "old" ? a.createdAtMillis - b.createdAtMillis : b.createdAtMillis - a.createdAtMillis);
@@ -294,7 +296,7 @@ function renderMapTab() {
     m.floor = f; m.selected = null; renderMapTab();
   });
   // 이 층에서 장기보관 제외한 분실물로 핀 색 정보 구성
-  const activeItems = foundItems().filter((it) => !isLongTerm(it));
+  const activeItems = foundItems().filter((it) => !isArchived(it));
   const colorInfo = {};
   activeItems.forEach((it) => {
     if (it.foundLocation.floor === m.floor) { (colorInfo[it.foundLocation.id] ||= { f: false, c: false }).f = true; }
@@ -305,15 +307,28 @@ function renderMapTab() {
   }, colorInfo);
 
   const resultEl = document.getElementById("map-result");
-  if (!m.selected) { resultEl.innerHTML = `<div class="empty-msg">지도에서 장소(핀)를 선택하면 그곳의 분실물이 표시됩니다.</div>`; return; }
   const sel = m.selected;
-  let locItems = activeItems.filter((it) => it.foundLocation.id === sel.id || it.currentLocation.id === sel.id);
-  locItems = sortByTime(locItems, m.sort);
-  let html = `<div class="selected-loc-title">${sel.floor}층 · ${esc(sel.name)}</div>`;
-  if (locItems.length === 0) {
-    html += `<div class="empty-msg">이 장소에 등록된 분실물이 아직 없어요.</div>`;
+  let list, title;
+  if (sel) {
+    // 특정 핀(장소) 선택: 그 장소의 분실물
+    list = activeItems.filter((it) => it.foundLocation.id === sel.id || it.currentLocation.id === sel.id);
+    title = `${sel.floor}층 · ${esc(sel.name)}`;
   } else {
-    html += locItems.map((it) => itemCardHtml(it, it.foundLocation.id === sel.id ? "found" : "current")).join("");
+    // 층만 선택: 그 층에 해당하는 모든 분실물 (발견 위치 또는 현재 위치가 이 층)
+    list = activeItems.filter((it) => it.foundLocation.floor === m.floor || it.currentLocation.floor === m.floor);
+    title = `${m.floor}층 전체`;
+  }
+  list = sortByTime(list, m.sort);
+  let html = `<div class="selected-loc-title">${title} · ${list.length}건</div>`;
+  if (list.length === 0) {
+    html += `<div class="empty-msg">${sel ? "이 장소에" : "이 층에"} 등록된 분실물이 아직 없어요.</div>`;
+  } else {
+    html += list.map((it) => {
+      const mb = sel
+        ? (it.foundLocation.id === sel.id ? "found" : "current")
+        : (it.foundLocation.floor === m.floor ? "found" : "current");
+      return itemCardHtml(it, mb);
+    }).join("");
   }
   resultEl.innerHTML = html;
   wireItemCards(resultEl);
@@ -326,7 +341,7 @@ document.querySelectorAll("[data-map-sort]").forEach((b) => b.addEventListener("
 function renderSearchTab() {
   const s = state.search;
   document.querySelectorAll("[data-search-scope]").forEach((b) => b.classList.toggle("active", b.dataset.searchScope === s.scope));
-  document.getElementById("search-scope-hint").style.display = s.scope === "longterm" ? "" : "none";
+  document.getElementById("search-scope-hint").style.display = s.scope === "archive" ? "" : "none";
   document.querySelectorAll("[data-search-sort]").forEach((b) => b.classList.toggle("active", b.dataset.searchSort === s.sort));
 
   document.querySelectorAll("[data-search-loc-mode]").forEach((b) => b.classList.toggle("active", b.dataset.searchLocMode === s.locMode));
@@ -350,9 +365,11 @@ function renderSearchTab() {
   }
 
   const locQuery = s.locMode === "map" ? (s.picked?.name || "") : s.locText.trim();
-  let results = foundItems().filter((it) => {
-    // 장기보관함 여부
-    if (s.scope === "longterm" ? !isLongTerm(it) : isLongTerm(it)) return false;
+  // 보관함(archive): 주인찾음 또는 장기 게시물만 (찾습니다 글 포함). 일반: 그 외 분실물만.
+  const base = s.scope === "archive" ? state.items : foundItems();
+  let results = base.filter((it) => {
+    const archived = isArchived(it);
+    if (s.scope === "archive" ? !archived : archived) return false;
     let locOk = true, matchedBy = null;
     if (locQuery) {
       const f = it.foundLocation.name.includes(locQuery);
@@ -371,7 +388,7 @@ function renderSearchTab() {
   });
   results = sortByTime(results, s.sort);
 
-  document.getElementById("search-count").textContent = `${s.scope === "longterm" ? "장기보관함" : "검색 결과"} ${results.length}건`;
+  document.getElementById("search-count").textContent = `${s.scope === "archive" ? "보관함" : "검색 결과"} ${results.length}건`;
   const resEl = document.getElementById("search-result");
   resEl.innerHTML = results.length === 0
     ? `<div class="empty-msg">조건에 맞는 분실물이 없어요.</div>`
@@ -524,7 +541,7 @@ function renderLostTab() {
     document.getElementById("lost-submit").disabled = !canSubmit;
   }
 
-  const lostList = sortByTime(state.items.filter((it) => it.postType === "lost"), L.sort);
+  const lostList = sortByTime(state.items.filter((it) => it.postType === "lost" && !isArchived(it)), L.sort);
   document.getElementById("lost-count").textContent = `찾는 글 ${lostList.length}건`;
   const resEl = document.getElementById("lost-result");
   resEl.innerHTML = lostList.length === 0
