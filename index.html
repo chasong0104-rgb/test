@@ -17,7 +17,7 @@
 
 <link rel="stylesheet" href="style.css" />
 </head>
-<body data-theme="castle">
+<body data-theme="wonyeo">
 <div id="app">
 
   <div id="loading" class="loading-screen">불러오는 중...</div>
@@ -26,9 +26,9 @@
     <header class="app-header">
       <div>
         <div class="title" id="header-title">🧭 원여고 분실물 지도</div>
-        <div class="tagline" id="header-tagline">성을 탐험하듯 학교를 누비는 지도</div>
+        <div class="tagline" id="header-tagline">벚꽃 내음 가득한 원여고 분실물 지도</div>
       </div>
-      <button id="theme-toggle">🎨 <span id="theme-label">고성 지도</span></button>
+      <button id="theme-toggle">🎨 <span id="theme-label">원여</span></button>
     </header>
 
     <main>
@@ -36,12 +36,28 @@
       <section id="tab-map" class="tab-section active">
         <div class="hint">층을 고르고 지도 위의 핀을 눌러 그 장소의 분실물을 확인하세요.</div>
         <div id="map-floor-picker" class="floor-row"></div>
+        <div class="map-toolbar">
+          <div class="legend">
+            <span class="legend-item"><span class="legend-dot dot-found"></span>발견 위치</span>
+            <span class="legend-item"><span class="legend-dot dot-current"></span>현재 위치</span>
+          </div>
+          <div class="sort-row" id="map-sort">
+            <button class="sort-btn active" data-map-sort="new">최신순</button>
+            <button class="sort-btn" data-map-sort="old">오래된순</button>
+          </div>
+        </div>
         <div id="map-mapwrap" class="map-wrap"></div>
         <div id="map-result"></div>
       </section>
 
       <!-- 검색 탭 -->
       <section id="tab-search" class="tab-section">
+        <div class="seg-row" id="search-scope">
+          <button class="seg-btn active" data-search-scope="normal">일반 분실물</button>
+          <button class="seg-btn" data-search-scope="longterm">📦 장기보관함</button>
+        </div>
+        <div class="hint" id="search-scope-hint" style="display:none;">등록된 지 30일이 지난 장기 분실물이에요.</div>
+
         <div class="field" style="background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px;">
           <div class="field-label" style="margin-bottom:8px;">📍 장소로 찾기</div>
           <div class="seg-row">
@@ -49,7 +65,7 @@
             <button class="seg-btn" data-search-loc-mode="map">지도에서 선택</button>
           </div>
           <div id="search-loc-text-wrap">
-            <input type="text" id="search-loc-text" placeholder="예: 도서관, 2학년 3반..." />
+            <input type="text" id="search-loc-text" placeholder="예: 도서관, 2-3, 미술실..." />
           </div>
           <div id="search-loc-map-wrap" style="display:none;">
             <div id="search-floor-picker" class="floor-row"></div>
@@ -72,12 +88,19 @@
           </div>
         </div>
 
-        <div class="hint" id="search-count" style="font-weight:700;">검색 결과 0건</div>
+        <div class="map-toolbar">
+          <div class="hint" id="search-count" style="font-weight:700; margin:0;">검색 결과 0건</div>
+          <div class="sort-row" id="search-sort">
+            <button class="sort-btn active" data-search-sort="new">최신순</button>
+            <button class="sort-btn" data-search-sort="old">오래된순</button>
+          </div>
+        </div>
         <div id="search-result"></div>
       </section>
 
-      <!-- 등록 탭 -->
+      <!-- 등록 탭 (분실물 발견 신고) -->
       <section id="tab-add" class="tab-section">
+        <div class="hint">주운 물건을 등록해 주세요. 로그인하면 등록 시 10P가 적립돼요.</div>
         <div class="field">
           <span class="field-label">사진</span>
           <div class="photo-row">
@@ -124,14 +147,86 @@
         <div class="field">
           <label class="checkbox-row">
             <input type="checkbox" id="add-moved-check" />
-            이미 분실물 보관 장소로 옮겨졌어요
+            <span>분실물의 위치가 변경되었어요<br><span class="checkbox-sub">(누르면 변경된 현재 위치 입력)</span></span>
           </label>
-          <div id="add-moved-text-wrap" style="display:none; margin-top:8px;">
-            <input type="text" id="add-moved-text" placeholder="예: 행정실 분실물함" />
+          <div id="add-moved-wrap" style="display:none; margin-top:10px;">
+            <div class="seg-row">
+              <button class="seg-btn active" data-add-moved-mode="map">지도에서 선택</button>
+              <button class="seg-btn" data-add-moved-mode="text">직접 입력</button>
+            </div>
+            <div id="add-moved-map-wrap">
+              <div id="add-moved-floor-picker" class="floor-row"></div>
+              <div id="add-moved-mapwrap" class="map-wrap"></div>
+              <div id="add-moved-picked-loc" style="margin-top:8px; font-size:13px; font-weight:700; color:var(--primaryDark);"></div>
+            </div>
+            <div id="add-moved-text-wrap" style="display:none;">
+              <input type="text" id="add-moved-text" placeholder="예: 행정실 분실물함" />
+            </div>
           </div>
         </div>
 
         <button class="btn-primary" id="add-submit" disabled>분실물 등록하기</button>
+      </section>
+
+      <!-- 찾습니다 탭 (물건을 잃어버린 사람이 올리는 글) -->
+      <section id="tab-lost" class="tab-section">
+        <div class="lost-intro">
+          <div class="font-display" style="font-size:17px; font-weight:700;">🙋 물건을 찾습니다</div>
+          <div class="sub">잃어버린 물건을 직접 찾는 글이에요. 발견하신 분이 알려줄 수 있어요.</div>
+        </div>
+        <button class="btn-secondary" id="lost-new-btn" style="margin-bottom:14px;">＋ 잃어버린 물건 글 올리기</button>
+
+        <div id="lost-form-wrap" style="display:none;">
+          <div class="field">
+            <span class="field-label">사진</span>
+            <div class="photo-row">
+              <button type="button" class="photo-btn" id="lost-photo-camera">📷 촬영</button>
+              <button type="button" class="photo-btn" id="lost-photo-gallery">🖼 앨범</button>
+            </div>
+            <input type="file" id="lost-file-camera" accept="image/*" capture="environment" style="display:none;" />
+            <input type="file" id="lost-file-gallery" accept="image/*" style="display:none;" />
+            <div id="lost-photo-preview"></div>
+          </div>
+          <div class="field">
+            <label class="field-label">잃어버린 물건 이름 *</label>
+            <input type="text" id="lost-title" placeholder="예: 파란색 텀블러" />
+          </div>
+          <div class="field">
+            <label class="field-label">카테고리 *</label>
+            <select id="lost-category"></select>
+          </div>
+          <div class="field">
+            <label class="field-label">설명</label>
+            <textarea id="lost-desc" rows="2" placeholder="특징, 잃어버린 상황 등을 적어주세요"></textarea>
+          </div>
+          <div class="field">
+            <span class="field-label">잃어버린 것 같은 장소 *</span>
+            <div class="seg-row">
+              <button class="seg-btn active" data-lost-loc-mode="map">지도에서 선택</button>
+              <button class="seg-btn" data-lost-loc-mode="text">직접 입력</button>
+            </div>
+            <div id="lost-loc-map-wrap">
+              <div id="lost-floor-picker" class="floor-row"></div>
+              <div id="lost-mapwrap" class="map-wrap"></div>
+              <div id="lost-picked-loc" style="margin-top:8px; font-size:13px; font-weight:700; color:var(--primaryDark);"></div>
+            </div>
+            <div id="lost-loc-text-wrap" style="display:none;">
+              <select id="lost-loc-floor" style="margin-bottom:8px;"></select>
+              <input type="text" id="lost-loc-text" placeholder="예: 3층 도서관 근처" />
+            </div>
+          </div>
+          <button class="btn-primary" id="lost-submit" disabled>찾는 글 올리기</button>
+          <button class="btn-secondary" id="lost-cancel" style="margin-top:8px;">취소</button>
+        </div>
+
+        <div class="map-toolbar">
+          <div class="hint" id="lost-count" style="font-weight:700; margin:0;">찾는 글 0건</div>
+          <div class="sort-row" id="lost-sort">
+            <button class="sort-btn active" data-lost-sort="new">최신순</button>
+            <button class="sort-btn" data-lost-sort="old">오래된순</button>
+          </div>
+        </div>
+        <div id="lost-result"></div>
       </section>
 
       <!-- MY 탭 -->
@@ -144,6 +239,7 @@
       <button class="nav-btn active" data-tab="map">📍<span>지도</span></button>
       <button class="nav-btn" data-tab="search">🔍<span>검색</span></button>
       <button class="nav-btn" data-tab="add">➕<span>등록</span></button>
+      <button class="nav-btn" data-tab="lost">🙋<span>찾습니다</span></button>
       <button class="nav-btn" data-tab="my">👤<span>MY</span></button>
     </nav>
   </div>

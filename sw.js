@@ -1,4 +1,4 @@
-const CACHE = "lostfound-shell-v2";
+const CACHE = "lostfound-shell-v3";
 const SHELL_FILES = [
   "./",
   "./index.html",
@@ -6,8 +6,11 @@ const SHELL_FILES = [
   "./app.js",
   "./supabase-config.js",
   "./manifest.json",
-  "./img/map_castle.jpg",
-  "./img/map_blossom.jpg",
+  "./img/wonyeo_1f.png",
+  "./img/wonyeo_2f.jpg",
+  "./img/wonyeo_3f.jpg",
+  "./img/wonyeo_4f.jpg",
+  "./img/wonyeo_5f.jpg",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
 ];

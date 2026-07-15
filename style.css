@@ -1,19 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
 
-body[data-theme="castle"] {
-  --bg: #EFE3C8;
-  --surface: #FBF4E7;
-  --surfaceAlt: #F3E6C8;
-  --primary: #7A2E2E;
-  --primaryDark: #5C1F1F;
-  --accent: #3F5C4A;
-  --text: #3A2E1E;
-  --muted: #8A7A5E;
-  --border: #D8C69C;
-  --map: url('img/map_castle.jpg');
-  --pinRing: rgba(122,46,46,0.25);
-}
-body[data-theme="blossom"] {
+/* 원여 테마 (핑크 벚꽃 — 기본) */
+body[data-theme="wonyeo"] {
   --bg: #FBF1F0;
   --surface: #FFFFFF;
   --surfaceAlt: #FBE7E6;
@@ -23,8 +11,26 @@ body[data-theme="blossom"] {
   --text: #4A3438;
   --muted: #977279;
   --border: #F0D6D6;
-  --map: url('img/map_blossom.jpg');
+  --found: #3B6FB0;   /* 발견 위치 색 (파랑) */
+  --current: #E08A2B; /* 현재 위치 색 (주황) */
   --pinRing: rgba(193,97,109,0.25);
+  --mapFilter: none;
+}
+/* 빈티지 테마 (차분한 세피아) */
+body[data-theme="vintage"] {
+  --bg: #EFE3C8;
+  --surface: #FBF4E7;
+  --surfaceAlt: #F3E6C8;
+  --primary: #7A2E2E;
+  --primaryDark: #5C1F1F;
+  --accent: #3F5C4A;
+  --text: #3A2E1E;
+  --muted: #8A7A5E;
+  --border: #D8C69C;
+  --found: #2F5A8C;
+  --current: #B36A1F;
+  --pinRing: rgba(122,46,46,0.25);
+  --mapFilter: sepia(0.35) contrast(0.96);
 }
 
 * { box-sizing: border-box; }
@@ -92,16 +98,57 @@ main { flex: 1; padding: 16px; padding-bottom: 90px; }
 /* 지도 */
 .map-wrap {
   position: relative; border-radius: 14px; overflow: hidden;
-  border: 1px solid var(--border); background: var(--map) center/cover; aspect-ratio: 1.42/1;
+  border: 1px solid var(--border); background: var(--surfaceAlt); line-height: 0;
 }
+.map-img { width: 100%; display: block; filter: var(--mapFilter); }
 .map-pin {
   position: absolute; transform: translate(-50%, -100%); cursor: pointer;
-  width: 15px; height: 15px; border-radius: 50% 50% 50% 0; transform-origin: center;
-  background: var(--primary); border: 2px solid #fff; box-shadow: 0 0 0 6px var(--pinRing);
-  transition: all .15s ease;
+  width: 14px; height: 14px; border-radius: 50% 50% 50% 0; transform-origin: center;
+  background: var(--primary); border: 2px solid #fff; box-shadow: 0 0 0 4px var(--pinRing);
+  transition: all .12s ease;
 }
-.map-pin.active { width: 20px; height: 20px; box-shadow: 0 0 0 8px var(--pinRing); z-index: 5; }
-.map-pin-btn { position: absolute; background: none; border: none; padding: 0; }
+.map-pin.active { width: 19px; height: 19px; box-shadow: 0 0 0 6px var(--pinRing); z-index: 6; }
+.map-pin.has-found { background: var(--found); }
+.map-pin.has-current { background: var(--current); }
+.map-pin.has-both { background: linear-gradient(135deg, var(--found) 0 50%, var(--current) 50% 100%); }
+.map-pin-btn { position: absolute; background: none; border: none; padding: 0; z-index: 2; transform: translate(-50%, -100%); }
+.map-pin-btn .map-pin { position: static; transform: none; }
+.map-pin-btn.active { z-index: 6; }
+
+/* 지도 툴바 (범례 + 정렬) */
+.map-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0 8px; flex-wrap: wrap; }
+.legend { display: flex; gap: 12px; font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.legend-item { display: flex; align-items: center; gap: 4px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.legend-dot.dot-found { background: var(--found); }
+.legend-dot.dot-current { background: var(--current); }
+.sort-row { display: flex; gap: 4px; }
+.sort-btn {
+  padding: 5px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface);
+  color: var(--muted); font-weight: 700; font-size: 11.5px; cursor: pointer;
+}
+.sort-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* 발견/현재 매칭 태그 */
+.match-tag { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; color: #fff; display: inline-block; }
+.match-tag.found { background: var(--found); }
+.match-tag.current { background: var(--current); }
+.badge-longterm { background: #EADFF5; color: #6A4A9A; }
+
+/* 체크박스 보조 설명 */
+.checkbox-sub { font-weight: 400; color: var(--muted); font-size: 11.5px; }
+
+/* 랭킹 */
+.rank-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px; margin-bottom: 16px; }
+.rank-title { font-size: 13px; font-weight: 800; margin-bottom: 10px; }
+.rank-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.rank-medal { font-size: 18px; width: 24px; text-align: center; }
+.rank-name { flex: 1; font-weight: 700; font-size: 14px; }
+.rank-pts { font-weight: 800; color: var(--primaryDark); font-size: 14px; }
+
+/* 찾습니다 탭 */
+.lost-intro { text-align: center; margin-bottom: 14px; }
+.lost-intro .sub { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
 
 .selected-loc-title { font-weight: 800; margin: 14px 0 8px; font-size: 16px; font-family: 'Gowun Batang', serif; }
 
