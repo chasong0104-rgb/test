@@ -1,4 +1,4 @@
-const CACHE = "lostfound-shell-v3";
+const CACHE = "lostfound-shell-v4";
 const SHELL_FILES = [
   "./",
   "./index.html",
